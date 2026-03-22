@@ -23,35 +23,44 @@ class HourlyChart extends StatelessWidget {
     final totalWidth = visible.length * colWidth;
     return SizedBox(
       height: 140,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: totalWidth,
-          height: 140,
-          child: CustomPaint(
-            painter: _HourlyChartPainter(
-              hours: visible,
-              textColor: textColor,
-              sunriseTime: sunriseTime,
-              sunsetTime: sunsetTime,
-            ),
-            child: Row(
-              children: visible.map((h) {
-                return SizedBox(
-                  width: colWidth,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      WeatherIcon(
-                        condition: h.condition,
-                        size: 20,
-                        color: textColor.withValues(alpha: 0.75),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+      child: ShaderMask(
+        shaderCallback: (rect) => LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Colors.white, Colors.white, Colors.transparent],
+          stops: const [0.0, 0.82, 1.0],
+        ).createShader(rect),
+        blendMode: BlendMode.dstIn,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: totalWidth,
+            height: 140,
+            child: CustomPaint(
+              painter: _HourlyChartPainter(
+                hours: visible,
+                textColor: textColor,
+                sunriseTime: sunriseTime,
+                sunsetTime: sunsetTime,
+              ),
+              child: Row(
+                children: visible.map((h) {
+                  return SizedBox(
+                    width: colWidth,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        WeatherIcon(
+                          condition: h.condition,
+                          size: 20,
+                          color: textColor.withValues(alpha: 0.75),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ),

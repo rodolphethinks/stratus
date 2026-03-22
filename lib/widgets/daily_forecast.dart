@@ -107,6 +107,20 @@ class DailyForecastList extends StatelessWidget {
                   child: Text('${d.high.round()}°',
                       style: AppTextStyles.tempBig(textColor), textAlign: TextAlign.left),
                 ),
+                // Precipitation probability — shown only when ≥20%
+                SizedBox(
+                  width: 34,
+                  child: d.precipitationProbability >= 20
+                      ? Text(
+                          '${d.precipitationProbability}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: textColor.withValues(alpha: 0.45),
+                          ),
+                          textAlign: TextAlign.right,
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),

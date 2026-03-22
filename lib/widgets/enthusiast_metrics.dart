@@ -4,12 +4,16 @@ import '../models/weather.dart';
 class EnthusiastMetrics extends StatelessWidget {
   final CurrentWeather current;
   final double currentUv;
+  final double currentVisibility; // km
+  final PressureTrend pressureTrend;
   final Color textColor;
 
   const EnthusiastMetrics({
     super.key,
     required this.current,
     required this.currentUv,
+    this.currentVisibility = 0.0,
+    this.pressureTrend = PressureTrend.steady,
     required this.textColor,
   });
 
@@ -34,42 +38,101 @@ class EnthusiastMetrics extends StatelessWidget {
     return const Color(0xFF9C27B0);
   }
 
+  static String _visLabel(double km) {
+    if (km <= 0) return '--';
+    if (km >= 10) return '${km.round()} km';
+    return '${km.toStringAsFixed(1)} km';
+  }
+
+  String _trendGlyph() {
+    switch (pressureTrend) {
+      case PressureTrend.rising: return '↑';
+      case PressureTrend.falling: return '↓';
+      case PressureTrend.steady: return '→';
+    }
+  }
+
+  Color _trendColor() {
+    switch (pressureTrend) {
+      case PressureTrend.rising: return const Color(0xFF4CAF50);
+      case PressureTrend.falling: return const Color(0xFFF44336);
+      case PressureTrend.steady: return const Color(0xFF9E9E9E);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final dew = current.dewPoint;
+    final dewComfort = dew < 10 ? 'Comfortable' : dew < 16 ? 'Mild' : 'Humid';
+
+    return Column(
       children: [
-        _MetricTile(
-          icon: Icons.air,
-          label: 'Wind',
-          value: '${current.windSpeed.round()}',
-          unit: 'km/h',
-          detail: compassDir(current.windDirection),
-          textColor: textColor,
+        // Row 1: Wind · Humidity · UV
+        Row(
+          children: [
+            _MetricTile(
+              icon: Icons.air,
+              label: 'Wind',
+              value: '${current.windSpeed.round()}',
+              unit: 'km/h',
+              detail: compassDir(current.windDirection),
+              textColor: textColor,
+            ),
+            const SizedBox(width: 8),
+            _MetricTile(
+              icon: Icons.water_drop_outlined,
+              label: 'Humidity',
+              value: '${current.humidity}',
+              unit: '%',
+              textColor: textColor,
+            ),
+            const SizedBox(width: 8),
+            _MetricTile(
+              icon: Icons.wb_sunny_outlined,
+              label: 'UV Index',
+              value: currentUv.round().toString(),
+              unit: uvLabel(currentUv),
+              valueColor: uvColor(currentUv),
+              textColor: textColor,
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        _MetricTile(
-          icon: Icons.opacity,
-          label: 'Humidity',
-          value: '${current.humidity}',
-          unit: '%',
-          textColor: textColor,
-        ),
-        const SizedBox(width: 8),
-        _MetricTile(
-          icon: Icons.wb_sunny,
-          label: 'UV Index',
-          value: currentUv.round().toString(),
-          unit: uvLabel(currentUv),
-          valueColor: uvColor(currentUv),
-          textColor: textColor,
-        ),
-        const SizedBox(width: 8),
-        _MetricTile(
-          icon: Icons.speed,
-          label: 'Pressure',
-          value: '${current.surfacePressure.round()}',
-          unit: 'hPa',
-          textColor: textColor,
+        const SizedBox(height: 8),
+        // Row 2: Dew Point · Pressure (+trend) · Visibility
+        Row(
+          children: [
+            _MetricTile(
+              icon: Icons.thermostat_outlined,
+              label: 'Dew Point',
+              value: '${dew.round()}°',
+              unit: dewComfort,
+              textColor: textColor,
+            ),
+            const SizedBox(width: 8),
+            _MetricTile(
+              icon: Icons.speed,
+              label: 'Pressure',
+              value: '${current.surfacePressure.round()}',
+              unit: 'hPa',
+              detail: _trendGlyph(),
+              detailColor: _trendColor(),
+              textColor: textColor,
+            ),
+            const SizedBox(width: 8),
+            _MetricTile(
+              icon: Icons.visibility_outlined,
+              label: 'Visibility',
+              value: _visLabel(currentVisibility),
+              unit: currentVisibility >= 10
+                  ? 'Clear'
+                  : currentVisibility >= 4
+                      ? 'Good'
+                      : currentVisibility >= 1
+                          ? 'Moderate'
+                          : 'Poor',
+              textColor: textColor,
+            ),
+          ],
         ),
       ],
     );
@@ -83,6 +146,7 @@ class _MetricTile extends StatelessWidget {
   final String unit;
   final String? detail;
   final Color? valueColor;
+  final Color? detailColor;
   final Color textColor;
 
   const _MetricTile({
@@ -92,6 +156,7 @@ class _MetricTile extends StatelessWidget {
     required this.unit,
     this.detail,
     this.valueColor,
+    this.detailColor,
     required this.textColor,
   });
 
@@ -99,7 +164,7 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
         decoration: BoxDecoration(
           color: textColor.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
@@ -107,12 +172,12 @@ class _MetricTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: textColor.withValues(alpha: 0.55)),
-            const SizedBox(height: 6),
+            Icon(icon, size: 17, color: textColor.withValues(alpha: 0.50)),
+            const SizedBox(height: 5),
             Text(
               value,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: valueColor ?? textColor,
               ),
@@ -120,16 +185,18 @@ class _MetricTile extends StatelessWidget {
             Text(
               unit,
               style: TextStyle(
-                fontSize: 11,
-                color: textColor.withValues(alpha: 0.55),
+                fontSize: 10,
+                color: textColor.withValues(alpha: 0.50),
               ),
+              textAlign: TextAlign.center,
             ),
             if (detail != null)
               Text(
                 detail!,
                 style: TextStyle(
                   fontSize: 11,
-                  color: textColor.withValues(alpha: 0.40),
+                  fontWeight: FontWeight.w600,
+                  color: detailColor ?? textColor.withValues(alpha: 0.40),
                 ),
               ),
           ],

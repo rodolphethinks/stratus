@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   AppMode _mode = AppMode.simple;
   AppSettings _settings = const AppSettings();
+  DateTime? _fetchedAt; // for "as of" trust timestamp
 
   // Default locations: Seoul first, Paris second
   static const _defaultLocations = [
@@ -92,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final loc = _locations[_activeIndex];
       final data = await _weatherService.fetchWeather(loc.latitude, loc.longitude);
-      if (mounted) setState(() { _weather = data; _loading = false; });
+      if (mounted) setState(() { _weather = data; _loading = false; _fetchedAt = DateTime.now(); });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
@@ -131,6 +132,45 @@ class _HomeScreenState extends State<HomeScreen> {
       _mode == AppMode.enthusiast && _settings.showAstronomy;
   bool get _showYesterday => _settings.showYesterday;
   bool get _showSunriseSunset => _settings.showSunriseSunset;
+
+  /// One-line smart summary of today's forecast from hourly data
+  String _dayHeadline(List<HourlyWeather> hours) {
+    if (hours.isEmpty) return '';
+    bool isRainy(HourlyWeather h) =>
+        h.precipitationProbability >= 30 ||
+        h.condition == WeatherCondition.rain ||
+        h.condition == WeatherCondition.heavyRain ||
+        h.condition == WeatherCondition.drizzle ||
+        h.condition == WeatherCondition.thunderstorm ||
+        h.condition == WeatherCondition.snow;
+
+    if (hours.any((h) => h.condition == WeatherCondition.thunderstorm)) {
+      return 'Thunderstorms possible today';
+    }
+    if (hours.any((h) => h.condition == WeatherCondition.snow)) {
+      return 'Snow expected today';
+    }
+
+    final daytimeHours = hours.where((h) => h.isDay).toList();
+    final morningH = hours.where((h) => h.time.hour >= 6 && h.time.hour < 12).toList();
+    final afternoonH = hours.where((h) => h.time.hour >= 12 && h.time.hour < 18).toList();
+
+    final morningRain = morningH.isNotEmpty && morningH.any(isRainy);
+    final afternoonRain = afternoonH.isNotEmpty && afternoonH.any(isRainy);
+    final allRain = daytimeHours.isNotEmpty && daytimeHours.every(isRainy);
+    final noRain = !hours.any(isRainy);
+
+    if (allRain) return 'Rain expected throughout the day';
+    if (noRain) {
+      final maxTemp = hours.map((h) => h.temperature).reduce((a, b) => a > b ? a : b);
+      if (maxTemp >= 30) return 'Hot and sunny today';
+      if (maxTemp >= 22) return 'Sunny and warm today';
+      return 'Clear skies all day';
+    }
+    if (morningRain && !afternoonRain) return 'Rain this morning, clearing this afternoon';
+    if (!morningRain && afternoonRain) return 'Clear morning, rain this afternoon';
+    return 'Showers possible today';
+  }
 
   void _openSettings() async {
     await Navigator.push(
@@ -311,6 +351,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final loc = _locations[_activeIndex];
     final locationNow = DateTime.now().toUtc().add(Duration(seconds: w.utcOffsetSeconds));
     final dateStr = DateFormat('EEEE · MMM d').format(locationNow);
+    final asOfStr = _fetchedAt != null
+        ? DateFormat('h:mm a').format(_fetchedAt!)
+        : null;
+    final headline = _dayHeadline(w.hourly);
 
     return RefreshIndicator(
       onRefresh: _fetchWeather,
@@ -345,6 +389,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(dateStr, style: AppTextStyles.dateLabel(_textColor)),
+                        if (asOfStr != null) ...[  
+                          const SizedBox(height: 1),
+                          Text(
+                            'Updated $asOfStr',
+                            style: AppTextStyles.dateLabel(_textColor).copyWith(
+                              fontSize: 11,
+                              color: _textColor.withValues(alpha: 0.35),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -381,6 +435,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       letterSpacing: 0.2,
                     ),
                   ),
+                  // Smart day summary — Simple mode only
+                  if (_mode == AppMode.simple && headline.isNotEmpty) ...[  
+                    const SizedBox(height: 2),
+                    Text(
+                      headline,
+                      style: AppTextStyles.dateLabel(_textColor).copyWith(
+                        fontSize: 13,
+                        color: _textColor.withValues(alpha: 0.50),
+                        fontStyle: FontStyle.italic,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     '${(w.hourly.isNotEmpty ? w.hourly.first.temperature : w.current.temperature).round()}°',
@@ -396,11 +463,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             // Enthusiast metrics row
-            if (_showMetrics) ...[  
+            if (_showMetrics) ...[
               const SizedBox(height: 20),
               EnthusiastMetrics(
                 current: w.current,
                 currentUv: w.hourly.isNotEmpty ? w.hourly.first.uvIndex : 0.0,
+                currentVisibility: w.hourly.isNotEmpty ? w.hourly.first.visibility : 0.0,
+                pressureTrend: w.pressureTrend,
                 textColor: _textColor,
               ),
             ],

@@ -16,6 +16,8 @@ class ConfidenceStrip extends StatelessWidget {
 
   static const _days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
+  String _dayLetter(DayConfidence c) => _days[(c.date.weekday - 1) % 7];
+
   double _opacityFor(ConfidenceLevel level, int index) {
     if (index <= 1) return 1.0;
     switch (level) {
@@ -85,7 +87,7 @@ class ConfidenceStrip extends StatelessWidget {
           children: List.generate(days.length, (i) => Expanded(
             child: Center(
               child: Text(
-                _days[i % 7],
+                _dayLetter(days[i]),
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w400,

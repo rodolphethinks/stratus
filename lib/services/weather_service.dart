@@ -28,6 +28,8 @@ class WeatherService {
         'wind_speed_10m',
         'uv_index',
         'relative_humidity_2m',
+        'surface_pressure',
+        'visibility',
       ].join(','),
       'daily': [
         'temperature_2m_max',
@@ -90,8 +92,33 @@ class WeatherService {
     final hourlyIsDay = hourlyRaw['is_day'] as List;
     final hourlyWind = hourlyRaw['wind_speed_10m'] as List?;
     final hourlyUv = hourlyRaw['uv_index'] as List?;
-    final hourlyHumidity = hourlyRaw['relative_humidity_2m'] as List?
-;
+    final hourlyHumidity = hourlyRaw['relative_humidity_2m'] as List?;
+    final hourlyPressure = hourlyRaw['surface_pressure'] as List?;
+    final hourlyVisibility = hourlyRaw['visibility'] as List?;
+
+    // Compute pressure trend: compare current pressure to 3h-ago hourly value
+    PressureTrend pressureTrend = PressureTrend.steady;
+    if (hourlyPressure != null) {
+      final threeHoursAgo = now.subtract(const Duration(hours: 3));
+      int? closestIdx;
+      double? closestDiff;
+      for (int i = 0; i < hourlyTimes.length; i++) {
+        final t = DateTime.parse('${hourlyTimes[i]}Z');
+        final diff = (t.difference(threeHoursAgo).inMinutes.abs()).toDouble();
+        if (closestDiff == null || diff < closestDiff) {
+          closestDiff = diff;
+          closestIdx = i;
+        }
+      }
+      if (closestIdx != null) {
+        final pastPressure = (hourlyPressure[closestIdx] as num?)?.toDouble();
+        if (pastPressure != null) {
+          final delta = current.surfacePressure - pastPressure;
+          if (delta > 0.5) pressureTrend = PressureTrend.rising;
+          if (delta < -0.5) pressureTrend = PressureTrend.falling;
+        }
+      }
+    }
 
     final List<HourlyWeather> hourly = [];
     for (int i = 0; i < hourlyTimes.length && hourly.length < 24; i++) {
@@ -108,6 +135,7 @@ class WeatherService {
           windSpeed: (hourlyWind?[i] as num?)?.toDouble() ?? 0.0,
           uvIndex: (hourlyUv?[i] as num?)?.toDouble() ?? 0.0,
           humidity: (hourlyHumidity?[i] as num?)?.toInt() ?? 0,
+          visibility: ((hourlyVisibility?[i] as num?)?.toDouble() ?? 0.0) / 1000.0, // m → km
         ));
       }
     }
@@ -215,6 +243,7 @@ class WeatherService {
       isRaining: isRaining,
       utcOffsetSeconds: utcOffsetSeconds,
       yesterday: yesterdayData,
+      pressureTrend: pressureTrend,
     );
   }
 

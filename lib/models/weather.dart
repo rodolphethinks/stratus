@@ -75,6 +75,9 @@ class CurrentWeather {
   });
 
   WeatherCondition get condition => conditionFromWMO(weatherCode, isDay: isDay);
+
+  /// Magnus approximation for dew point in °C
+  double get dewPoint => temperature - (100.0 - humidity) / 5.0;
 }
 
 class HourlyWeather {
@@ -86,6 +89,7 @@ class HourlyWeather {
   final double windSpeed;
   final double uvIndex;
   final int humidity;
+  final double visibility; // km
 
   HourlyWeather({
     required this.time,
@@ -96,6 +100,7 @@ class HourlyWeather {
     this.windSpeed = 0.0,
     this.uvIndex = 0.0,
     this.humidity = 0,
+    this.visibility = 0.0,
   });
 
   WeatherCondition get condition => conditionFromWMO(weatherCode, isDay: isDay);
@@ -126,6 +131,9 @@ class DailyWeather {
 /// Confidence level derived from ensemble spread
 enum ConfidenceLevel { high, medium, low }
 
+/// Direction of surface pressure change over the past 3 hours
+enum PressureTrend { rising, steady, falling }
+
 class DayConfidence {
   final DateTime date;
   final ConfidenceLevel level;
@@ -142,6 +150,7 @@ class WeatherData {
   final bool isRaining;
   final int utcOffsetSeconds;
   final DailyWeather? yesterday;
+  final PressureTrend pressureTrend;
 
   WeatherData({
     required this.current,
@@ -152,6 +161,7 @@ class WeatherData {
     required this.isRaining,
     required this.utcOffsetSeconds,
     this.yesterday,
+    this.pressureTrend = PressureTrend.steady,
   });
 }
 
