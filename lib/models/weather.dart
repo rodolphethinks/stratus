@@ -51,7 +51,9 @@ class CurrentWeather {
   final double temperature;
   final double feelsLike;
   final double windSpeed;
+  final int windDirection; // degrees 0-359
   final int humidity;
+  final double surfacePressure; // hPa
   final double dailyHigh;
   final double dailyLow;
   final int weatherCode;
@@ -62,7 +64,9 @@ class CurrentWeather {
     required this.temperature,
     required this.feelsLike,
     required this.windSpeed,
+    this.windDirection = 0,
     required this.humidity,
+    this.surfacePressure = 1013.0,
     required this.dailyHigh,
     required this.dailyLow,
     required this.weatherCode,
@@ -79,6 +83,9 @@ class HourlyWeather {
   final int precipitationProbability;
   final int weatherCode;
   final bool isDay;
+  final double windSpeed;
+  final double uvIndex;
+  final int humidity;
 
   HourlyWeather({
     required this.time,
@@ -86,6 +93,9 @@ class HourlyWeather {
     required this.precipitationProbability,
     required this.weatherCode,
     required this.isDay,
+    this.windSpeed = 0.0,
+    this.uvIndex = 0.0,
+    this.humidity = 0,
   });
 
   WeatherCondition get condition => conditionFromWMO(weatherCode, isDay: isDay);
@@ -97,6 +107,8 @@ class DailyWeather {
   final double low;
   final int weatherCode;
   final int precipitationProbability;
+  final DateTime? sunriseTime; // local time (stored as "fake UTC" matching hourly)
+  final DateTime? sunsetTime;
 
   DailyWeather({
     required this.date,
@@ -104,6 +116,8 @@ class DailyWeather {
     required this.low,
     required this.weatherCode,
     required this.precipitationProbability,
+    this.sunriseTime,
+    this.sunsetTime,
   });
 
   WeatherCondition get condition => conditionFromWMO(weatherCode, isDay: true);

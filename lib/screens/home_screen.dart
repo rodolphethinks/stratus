@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/weather.dart';
 import '../services/weather_service.dart';
 import '../services/location_store.dart';
+import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/weather_icon.dart';
 import '../widgets/nowcast_pill.dart';
@@ -11,6 +12,10 @@ import '../widgets/confidence_strip.dart';
 import '../widgets/hourly_chart.dart';
 import '../widgets/daily_forecast.dart';
 import '../widgets/city_switcher.dart';
+import '../widgets/best_time_card.dart';
+import '../widgets/enthusiast_metrics.dart';
+import '../widgets/astronomy_card.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,13 +27,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final WeatherService _weatherService = WeatherService();
   final LocationStore _locationStore = LocationStore();
+  final SettingsStore _settingsStore = SettingsStore();
 
   List<SavedLocation> _locations = [];
   int _activeIndex = 0;
   WeatherData? _weather;
   bool _loading = true;
   String? _error;
-  bool _showYesterday = false;
+
+  AppMode _mode = AppMode.simple;
+  AppSettings _settings = const AppSettings();
 
   // Default locations: Seoul first, Paris second
   static const _defaultLocations = [
@@ -64,11 +72,18 @@ class _HomeScreenState extends State<HomeScreen> {
       await _locationStore.save(locations);
     }
     final activeIndex = await _locationStore.getActiveIndex();
+    await _loadSettings();
     setState(() {
       _locations = locations;
       _activeIndex = activeIndex.clamp(0, locations.length - 1);
     });
     await _fetchWeather();
+  }
+
+  Future<void> _loadSettings() async {
+    final mode = await _settingsStore.getMode();
+    final settings = await _settingsStore.getSettings();
+    if (mounted) setState(() { _mode = mode; _settings = settings; });
   }
 
   Future<void> _fetchWeather() async {
@@ -103,6 +118,37 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() { _locations = updated; _activeIndex = newActive; });
     await _locationStore.save(updated);
     await _locationStore.setActiveIndex(newActive);
+  }
+
+  // Visibility helpers
+  bool get _showConfidence =>
+      _mode == AppMode.enthusiast || _settings.showConfidenceStrip;
+  bool get _showBestTime =>
+      _mode == AppMode.simple && _settings.showBestTimeCard;
+  bool get _showMetrics =>
+      _mode == AppMode.enthusiast && _settings.showMetricsRow;
+  bool get _showAstronomy =>
+      _mode == AppMode.enthusiast && _settings.showAstronomy;
+  bool get _showYesterday => _settings.showYesterday;
+  bool get _showSunriseSunset => _settings.showSunriseSunset;
+
+  void _openSettings() async {
+    await Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, animation, __) => const SettingsScreen(),
+        transitionsBuilder: (_, animation, __, child) => SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        ),
+      ),
+    );
+    await _loadSettings();
   }
 
   void _showCitySwitcher() {
@@ -304,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => _showSettings(context),
+                  onTap: _openSettings,
                   child: Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Icon(Icons.more_horiz,
@@ -327,7 +373,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: 44,
                     color: _textColor.withValues(alpha: 0.85),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
+                  Text(
+                    conditionLabel(w.current.condition),
+                    style: AppTextStyles.dateLabel(_textColor).copyWith(
+                      color: _textColor.withValues(alpha: 0.60),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     '${(w.hourly.isNotEmpty ? w.hourly.first.temperature : w.current.temperature).round()}°',
                     style: AppTextStyles.hero(_textColor),
@@ -341,6 +395,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
+            // Enthusiast metrics row
+            if (_showMetrics) ...[  
+              const SizedBox(height: 20),
+              EnthusiastMetrics(
+                current: w.current,
+                currentUv: w.hourly.isNotEmpty ? w.hourly.first.uvIndex : 0.0,
+                textColor: _textColor,
+              ),
+            ],
+
             const SizedBox(height: 28),
 
             // Nowcast pill
@@ -351,13 +415,30 @@ class _HomeScreenState extends State<HomeScreen> {
               hourlyPrecip: w.hourly.take(6).map((h) => h.precipitationProbability).toList(),
             ),
 
-            const SizedBox(height: 28),
+            // Best time card — Simple mode only
+            if (_showBestTime) ...[  
+              const SizedBox(height: 16),
+              BestTimeCard(hours: w.hourly, textColor: _textColor),
+            ],
 
-            // Confidence strip
-            ConfidenceStrip(
-              confidence: w.confidence,
-              textColor: _textColor,
-            ),
+            // Astronomy card — Enthusiast mode only
+            if (_showAstronomy) ...[  
+              const SizedBox(height: 16),
+              AstronomyCard(
+                sunriseTime: w.daily.isNotEmpty ? w.daily.first.sunriseTime : null,
+                sunsetTime: w.daily.isNotEmpty ? w.daily.first.sunsetTime : null,
+                textColor: _textColor,
+              ),
+            ],
+
+            // Confidence strip — always in Enthusiast, toggleable in Simple
+            if (_showConfidence) ...[  
+              const SizedBox(height: 28),
+              ConfidenceStrip(
+                confidence: w.confidence,
+                textColor: _textColor,
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -365,6 +446,12 @@ class _HomeScreenState extends State<HomeScreen> {
             HourlyChart(
               hours: w.hourly,
               textColor: _textColor,
+              sunriseTime: _showSunriseSunset && w.daily.isNotEmpty
+                  ? w.daily.first.sunriseTime
+                  : null,
+              sunsetTime: _showSunriseSunset && w.daily.isNotEmpty
+                  ? w.daily.first.sunsetTime
+                  : null,
             ),
 
             const SizedBox(height: 20),
@@ -389,125 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showSettings(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFFAFAF7),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text('Settings',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E))),
-              const SizedBox(height: 20),
-              _SettingRow(label: 'Mode', value: 'Simple', onTap: () {}),
-              _SettingRow(label: 'Units', value: '°C / km/h', onTap: () {}),
-              _SettingRow(label: 'Morning digest', value: '7:00 AM', onTap: () {}),
-              _SettingToggleRow(
-                label: 'Yesterday',
-                subtitle: 'Compare with previous day in forecast',
-                value: _showYesterday,
-                onChanged: (v) {
-                  setSheetState(() {});
-                  setState(() => _showYesterday = v);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  const _SettingRow({required this.label, required this.value, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 15, color: Color(0xFF1A1A2E))),
-            Row(
-              children: [
-                Text(value, style: const TextStyle(fontSize: 15, color: Color(0x881A1A2E))),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right, size: 16, color: Color(0x441A1A2E)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 enum _MoodState { sunny, rainy, overcast, night, nightCloudy }
-
-class _SettingToggleRow extends StatelessWidget {
-  final String label;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SettingToggleRow({
-    required this.label,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(fontSize: 15, color: Color(0xFF1A1A2E))),
-                Text(subtitle,
-                    style: const TextStyle(fontSize: 12, color: Color(0x661A1A2E))),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: const Color(0xFF1A1A2E),
-          ),
-        ],
-      ),
-    );
-  }
-}
 

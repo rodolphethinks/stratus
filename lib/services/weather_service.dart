@@ -14,6 +14,8 @@ class WeatherService {
         'apparent_temperature',
         'relative_humidity_2m',
         'wind_speed_10m',
+        'wind_direction_10m',
+        'surface_pressure',
         'weather_code',
         'is_day',
         'precipitation_probability',
@@ -23,12 +25,17 @@ class WeatherService {
         'precipitation_probability',
         'weather_code',
         'is_day',
+        'wind_speed_10m',
+        'uv_index',
+        'relative_humidity_2m',
       ].join(','),
       'daily': [
         'temperature_2m_max',
         'temperature_2m_min',
         'weather_code',
         'precipitation_probability_max',
+        'sunrise',
+        'sunset',
       ].join(','),
       'forecast_days': '7',
       'past_days': '1',
@@ -65,7 +72,9 @@ class WeatherService {
       temperature: (cur['temperature_2m'] as num).toDouble(),
       feelsLike: (cur['apparent_temperature'] as num).toDouble(),
       windSpeed: (cur['wind_speed_10m'] as num).toDouble(),
+      windDirection: (cur['wind_direction_10m'] as num?)?.toInt() ?? 0,
       humidity: (cur['relative_humidity_2m'] as num).toInt(),
+      surfacePressure: (cur['surface_pressure'] as num?)?.toDouble() ?? 1013.0,
       dailyHigh: todayHigh,
       dailyLow: todayLow,
       weatherCode: currentCode,
@@ -79,6 +88,10 @@ class WeatherService {
     final hourlyPrecip = hourlyRaw['precipitation_probability'] as List;
     final hourlyCodes = hourlyRaw['weather_code'] as List;
     final hourlyIsDay = hourlyRaw['is_day'] as List;
+    final hourlyWind = hourlyRaw['wind_speed_10m'] as List?;
+    final hourlyUv = hourlyRaw['uv_index'] as List?;
+    final hourlyHumidity = hourlyRaw['relative_humidity_2m'] as List?
+;
 
     final List<HourlyWeather> hourly = [];
     for (int i = 0; i < hourlyTimes.length && hourly.length < 24; i++) {
@@ -92,6 +105,9 @@ class WeatherService {
           precipitationProbability: (hourlyPrecip[i] as num?)?.toInt() ?? 0,
           weatherCode: (hourlyCodes[i] as num).toInt(),
           isDay: (hourlyIsDay[i] as num).toInt() == 1,
+          windSpeed: (hourlyWind?[i] as num?)?.toDouble() ?? 0.0,
+          uvIndex: (hourlyUv?[i] as num?)?.toDouble() ?? 0.0,
+          humidity: (hourlyHumidity?[i] as num?)?.toInt() ?? 0,
         ));
       }
     }
@@ -100,17 +116,30 @@ class WeatherService {
     final dailyDates = dailyRaw['time'] as List;
     final dailyCodes = dailyRaw['weather_code'] as List;
     final dailyPrecip = dailyRaw['precipitation_probability_max'] as List;
+    final dailySunrise = dailyRaw['sunrise'] as List?;
+    final dailySunset = dailyRaw['sunset'] as List?;
 
     final todayDate = DateTime.utc(now.year, now.month, now.day);
     DailyWeather? yesterdayData;
     final List<DailyWeather> daily = [];
     for (int i = 0; i < dailyDates.length; i++) {
+      // Parse sunrise/sunset — same fake-UTC trick as hourly
+      DateTime? sunriseTime;
+      DateTime? sunsetTime;
+      if (dailySunrise != null && dailySunrise[i] != null) {
+        sunriseTime = DateTime.parse('${dailySunrise[i]}Z');
+      }
+      if (dailySunset != null && dailySunset[i] != null) {
+        sunsetTime = DateTime.parse('${dailySunset[i]}Z');
+      }
       final d = DailyWeather(
         date: DateTime.parse(dailyDates[i] as String),
         high: (dailyHighList[i] as num).toDouble(),
         low: (dailyLowList[i] as num).toDouble(),
         weatherCode: (dailyCodes[i] as num).toInt(),
         precipitationProbability: (dailyPrecip[i] as num?)?.toInt() ?? 0,
+        sunriseTime: sunriseTime,
+        sunsetTime: sunsetTime,
       );
       final dDate = DateTime.utc(d.date.year, d.date.month, d.date.day);
       if (dDate.isBefore(todayDate)) {

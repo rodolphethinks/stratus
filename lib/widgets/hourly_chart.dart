@@ -5,11 +5,15 @@ import '../widgets/weather_icon.dart';
 class HourlyChart extends StatelessWidget {
   final List<HourlyWeather> hours;
   final Color textColor;
+  final DateTime? sunriseTime;
+  final DateTime? sunsetTime;
 
   const HourlyChart({
     super.key,
     required this.hours,
     required this.textColor,
+    this.sunriseTime,
+    this.sunsetTime,
   });
 
   @override
@@ -28,6 +32,8 @@ class HourlyChart extends StatelessWidget {
             painter: _HourlyChartPainter(
               hours: visible,
               textColor: textColor,
+              sunriseTime: sunriseTime,
+              sunsetTime: sunsetTime,
             ),
             child: Row(
               children: visible.map((h) {
@@ -57,8 +63,15 @@ class HourlyChart extends StatelessWidget {
 class _HourlyChartPainter extends CustomPainter {
   final List<HourlyWeather> hours;
   final Color textColor;
+  final DateTime? sunriseTime;
+  final DateTime? sunsetTime;
 
-  _HourlyChartPainter({required this.hours, required this.textColor});
+  _HourlyChartPainter({
+    required this.hours,
+    required this.textColor,
+    this.sunriseTime,
+    this.sunsetTime,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -183,10 +196,80 @@ class _HourlyChartPainter extends CustomPainter {
         Paint()..color = textColor.withValues(alpha: 0.45),
       );
     }
+
+    // Draw sunrise / sunset vertical markers
+    _drawSunMarker(canvas, size, sunriseTime, isSunrise: true,
+        chartTop: chartTop, chartBottom: chartBottom, colWidth: colWidth);
+    _drawSunMarker(canvas, size, sunsetTime, isSunrise: false,
+        chartTop: chartTop, chartBottom: chartBottom, colWidth: colWidth);
+  }
+
+  void _drawSunMarker(
+    Canvas canvas,
+    Size size,
+    DateTime? target, {
+    required bool isSunrise,
+    required double chartTop,
+    required double chartBottom,
+    required double colWidth,
+  }) {
+    if (target == null || hours.isEmpty) return;
+    // Find first hour that is after target
+    for (int i = 0; i < hours.length; i++) {
+      if (hours[i].time.isAfter(target)) {
+        // Interpolate x position between column i-1 and i
+        double x;
+        if (i > 0) {
+          final prev = hours[i - 1].time.millisecondsSinceEpoch.toDouble();
+          final curr = hours[i].time.millisecondsSinceEpoch.toDouble();
+          final tgt = target.millisecondsSinceEpoch.toDouble();
+          final frac = ((tgt - prev) / (curr - prev)).clamp(0.0, 1.0);
+          x = colWidth * (i - 1 + frac + 0.5);
+        } else {
+          x = colWidth * 0.5;
+        }
+
+        final lineColor = isSunrise
+            ? const Color(0xFFE8A020)
+            : const Color(0xFF8090C8);
+
+        // Vertical dashed line (draw as short segments)
+        final paint = Paint()
+          ..color = lineColor.withValues(alpha: 0.55)
+          ..strokeWidth = 1.0
+          ..style = PaintingStyle.stroke;
+        const dashLen = 4.0;
+        const gap = 3.0;
+        double y = chartTop + 22; // start below icon row label area
+        while (y < chartBottom) {
+          canvas.drawLine(Offset(x, y), Offset(x, (y + dashLen).clamp(0.0, chartBottom)), paint);
+          y += dashLen + gap;
+        }
+
+        // Arrow label: ↑ for sunrise, ↓ for sunset
+        final label = isSunrise ? '↑' : '↓';
+        final tp = TextPainter(
+          text: TextSpan(
+            text: label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: lineColor.withValues(alpha: 0.75),
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x - tp.width / 2, chartTop + 10));
+        break;
+      }
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _HourlyChartPainter old) => old.hours != hours;
+  bool shouldRepaint(covariant _HourlyChartPainter old) =>
+      old.hours != hours ||
+      old.sunriseTime != sunriseTime ||
+      old.sunsetTime != sunsetTime;
 }
 
 
