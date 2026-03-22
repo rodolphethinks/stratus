@@ -1,11 +1,58 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/weather.dart';
+import 'ensemble_service.dart';
+import 'alerts_service.dart';
+import 'historical_service.dart';
 
 class WeatherService {
   static const String _baseUrl = 'https://api.open-meteo.com/v1';
 
+  final EnsembleService _ensemble = EnsembleService();
+  final AlertsService _alerts = AlertsService();
+  final HistoricalService _historical = HistoricalService();
+
   Future<WeatherData> fetchWeather(double lat, double lon) async {
+    // 1. Fetch main forecast (blocking — needed first)
+    final base = await _fetchMainForecast(lat, lon);
+
+    // 2. Run optional enrichment calls in parallel
+    final today = base.daily.isNotEmpty ? base.daily.first.date : DateTime.now();
+
+    final ensembleFuture = _ensemble
+        .fetchConfidence(lat, lon, base.daily)
+        .onError((_, __) => <DayConfidence>[]);
+
+    final alertsFuture = _alerts
+        .fetchAlerts(lat, lon)
+        .onError((_, __) => <WeatherAlert>[]);
+
+    final histFuture = _historical
+        .fetchAvgForDate(lat: lat, lon: lon, month: today.month, day: today.day)
+        .onError((_, __) => null);
+
+    final ensembleConf = await ensembleFuture;
+    final weatherAlerts = await alertsFuture;
+    final histAvg = await histFuture;
+
+    return WeatherData(
+      current: base.current,
+      hourly: base.hourly,
+      daily: base.daily,
+      confidence:
+          ensembleConf.isNotEmpty ? ensembleConf : base.confidence,
+      nowcastMessage: base.nowcastMessage,
+      isRaining: base.isRaining,
+      utcOffsetSeconds: base.utcOffsetSeconds,
+      yesterday: base.yesterday,
+      pressureTrend: base.pressureTrend,
+      alerts: weatherAlerts,
+      historicalAvgHigh: histAvg?.avgHigh,
+      historicalAvgLow: histAvg?.avgLow,
+    );
+  }
+
+  Future<WeatherData> _fetchMainForecast(double lat, double lon) async {
     final uri = Uri.parse('$_baseUrl/forecast').replace(queryParameters: {
       'latitude': lat.toString(),
       'longitude': lon.toString(),

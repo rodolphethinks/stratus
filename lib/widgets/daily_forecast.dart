@@ -7,12 +7,14 @@ class DailyForecastList extends StatelessWidget {
   final List<DailyWeather> days;
   final Color textColor;
   final DailyWeather? yesterday;
+  final double? historicalAvgHigh;
 
   const DailyForecastList({
     super.key,
     required this.days,
     required this.textColor,
     this.yesterday,
+    this.historicalAvgHigh,
   });
 
   Color _barColor(double high) {
@@ -40,7 +42,8 @@ class DailyForecastList extends StatelessWidget {
     final weekLowR  = visible.map((d) => d.low.round()).reduce((a, b) => a < b ? a : b).toDouble();
     final absRangeR = (weekHighR - weekLowR).clamp(1.0, double.infinity);
 
-    Widget buildRow(DailyWeather d, String label, bool isToday, {double opacity = 1.0}) {
+    Widget buildRow(DailyWeather d, String label, bool isToday,
+        {double opacity = 1.0, double? histAvgHigh}) {
       final barColor = _barColor(d.high);
       final loR = d.low.round().toDouble();
       final hiR = d.high.round().toDouble();
@@ -121,6 +124,33 @@ class DailyForecastList extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ),
+                // Historical avg badge — shown on Today row when diff > 1°C
+                if (isToday && histAvgHigh != null)
+                  Builder(builder: (_) {
+                    final diff = (d.high - histAvgHigh).round();
+                    if (diff.abs() <= 1) return const SizedBox.shrink();
+                    final positive = diff > 0;
+                    return Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: positive
+                            ? const Color(0xFFE84040).withValues(alpha: 0.12)
+                            : const Color(0xFF4480E8).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        '${positive ? '+' : ''}$diff° avg',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: positive
+                              ? const Color(0xFFE84040).withValues(alpha: 0.80)
+                              : const Color(0xFF4480E8).withValues(alpha: 0.80),
+                        ),
+                      ),
+                    );
+                  }),
               ],
             ),
           ),
@@ -136,7 +166,8 @@ class DailyForecastList extends StatelessWidget {
           final d = visible[i];
           final isToday = i == 0;
           final label = isToday ? 'Today' : _dayName(d.date);
-          return buildRow(d, label, isToday);
+          return buildRow(d, label, isToday,
+              histAvgHigh: isToday ? historicalAvgHigh : null);
         }),
       ],
     );

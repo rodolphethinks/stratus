@@ -15,6 +15,8 @@ import '../widgets/city_switcher.dart';
 import '../widgets/best_time_card.dart';
 import '../widgets/enthusiast_metrics.dart';
 import '../widgets/astronomy_card.dart';
+import '../widgets/alert_banner.dart';
+import '../widgets/radar_map.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -130,6 +132,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _mode == AppMode.enthusiast && _settings.showMetricsRow;
   bool get _showAstronomy =>
       _mode == AppMode.enthusiast && _settings.showAstronomy;
+  bool get _showRadar =>
+      _mode == AppMode.enthusiast && _settings.showRadar;
+  bool get _showAlerts => _settings.showAlerts;
+  bool get _showHistoricalBadge => _settings.showHistoricalBadge;
   bool get _showYesterday => _settings.showYesterday;
   bool get _showSunriseSunset => _settings.showSunriseSunset;
 
@@ -416,6 +422,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 36),
 
+            // Severe weather alerts
+            if (_showAlerts && w.alerts.isNotEmpty) ...[
+              AlertBanner(alerts: w.alerts, textColor: _textColor),
+              const SizedBox(height: 16),
+            ],
+
             // Hero
             Center(
               child: Column(
@@ -487,7 +499,13 @@ class _HomeScreenState extends State<HomeScreen> {
             // Best time card — Simple mode only
             if (_showBestTime) ...[  
               const SizedBox(height: 16),
-              BestTimeCard(hours: w.hourly, textColor: _textColor),
+              BestTimeCard(
+                hours: w.hourly,
+                textColor: _textColor,
+                activityType: ActivityTypeX.fromString(_settings.preferredActivity),
+                sunriseTime: w.daily.isNotEmpty ? w.daily.first.sunriseTime : null,
+                sunsetTime: w.daily.isNotEmpty ? w.daily.first.sunsetTime : null,
+              ),
             ],
 
             // Astronomy card — Enthusiast mode only
@@ -496,6 +514,16 @@ class _HomeScreenState extends State<HomeScreen> {
               AstronomyCard(
                 sunriseTime: w.daily.isNotEmpty ? w.daily.first.sunriseTime : null,
                 sunsetTime: w.daily.isNotEmpty ? w.daily.first.sunsetTime : null,
+                textColor: _textColor,
+              ),
+            ],
+
+            // Radar map — Enthusiast mode only
+            if (_showRadar) ...[
+              const SizedBox(height: 20),
+              RadarMap(
+                latitude: loc.latitude,
+                longitude: loc.longitude,
                 textColor: _textColor,
               ),
             ],
@@ -536,6 +564,7 @@ class _HomeScreenState extends State<HomeScreen> {
               days: w.daily,
               textColor: _textColor,
               yesterday: _showYesterday ? w.yesterday : null,
+              historicalAvgHigh: _showHistoricalBadge ? w.historicalAvgHigh : null,
             ),
 
             const SizedBox(height: 40),

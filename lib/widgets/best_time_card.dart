@@ -5,27 +5,26 @@ import '../theme/app_theme.dart';
 class BestTimeCard extends StatelessWidget {
   final List<HourlyWeather> hours;
   final Color textColor;
+  final ActivityType activityType;
+  final DateTime? sunriseTime;
+  final DateTime? sunsetTime;
 
   const BestTimeCard({
     super.key,
     required this.hours,
     required this.textColor,
+    this.activityType = ActivityType.walking,
+    this.sunriseTime,
+    this.sunsetTime,
   });
 
-  /// Find the best 2-hour daytime window in the next 24h where:
-  ///   - isDay is true
-  ///   - precipitation probability < 25%
-  ///   - temperature in reasonable outdoor range (5–36°C)
+  /// Find the best 2-hour window using activity-specific criteria
   ({String timeRange, String reason, bool found}) _bestWindow() {
     for (int i = 0; i < hours.length - 1; i++) {
       final h = hours[i];
       final h2 = hours[i + 1];
-      if (h.isDay &&
-          h.precipitationProbability < 25 &&
-          h.temperature >= 5 &&
-          h.temperature <= 36 &&
-          h2.isDay &&
-          h2.precipitationProbability < 25) {
+      if (activityType.isSuitable(h, sunriseTime: sunriseTime, sunsetTime: sunsetTime) &&
+          activityType.isSuitable(h2, sunriseTime: sunriseTime, sunsetTime: sunsetTime)) {
         final start = _fmt(h.time.hour);
         final endHour = (h2.time.hour + 1).clamp(0, 23);
         final end = _fmt(endHour);
@@ -37,15 +36,13 @@ class BestTimeCard extends StatelessWidget {
   }
 
   String _reason(HourlyWeather h) {
-    final isRainy = h.condition == WeatherCondition.rain ||
-        h.condition == WeatherCondition.heavyRain ||
-        h.condition == WeatherCondition.drizzle ||
-        h.condition == WeatherCondition.thunderstorm ||
-        h.condition == WeatherCondition.snow;
-    if (isRainy || h.precipitationProbability >= 15) return 'Low rain risk';
-    if (h.temperature >= 22) return 'Warm & clear';
-    if (h.temperature >= 12) return 'Fresh & dry';
-    return 'Cool & clear';
+    if (activityType == ActivityType.photography) {
+      return 'Golden hour light';
+    }
+    if (h.precipitationProbability < 10 && h.temperature >= 18) return 'Warm & clear';
+    if (h.precipitationProbability < 15 && h.temperature >= 10) return 'Fresh & dry';
+    if (h.precipitationProbability < 25) return 'Low rain risk';
+    return 'Best window available';
   }
 
   String _fmt(int hour) {
@@ -66,10 +63,9 @@ class BestTimeCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            result.found ? Icons.directions_walk : Icons.home_outlined,
-            size: 26,
-            color: textColor.withValues(alpha: 0.50),
+          Text(
+            result.found ? activityType.emoji : '🏠',
+            style: const TextStyle(fontSize: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -77,7 +73,7 @@ class BestTimeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'BEST TIME OUTSIDE',
+                  'BEST TIME · ${activityType.displayName.toUpperCase()}',
                   style: AppTextStyles.sectionLabel(textColor),
                 ),
                 const SizedBox(height: 3),

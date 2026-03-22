@@ -137,8 +137,10 @@ enum PressureTrend { rising, steady, falling }
 class DayConfidence {
   final DateTime date;
   final ConfidenceLevel level;
+  /// Ensemble temperature spread in °C (null = index-based fallback)
+  final double? spread;
 
-  DayConfidence({required this.date, required this.level});
+  DayConfidence({required this.date, required this.level, this.spread});
 }
 
 class WeatherData {
@@ -151,6 +153,11 @@ class WeatherData {
   final int utcOffsetSeconds;
   final DailyWeather? yesterday;
   final PressureTrend pressureTrend;
+  final List<WeatherAlert> alerts;
+  /// Historical 5-year average high for today (null if unavailable)
+  final double? historicalAvgHigh;
+  /// Historical 5-year average low for today (null if unavailable)
+  final double? historicalAvgLow;
 
   WeatherData({
     required this.current,
@@ -162,9 +169,120 @@ class WeatherData {
     required this.utcOffsetSeconds,
     this.yesterday,
     this.pressureTrend = PressureTrend.steady,
+    this.alerts = const [],
+    this.historicalAvgHigh,
+    this.historicalAvgLow,
+  });
+}
+/// A severe or notable weather alert from WeatherAPI
+class WeatherAlert {
+  final String event;
+  final String headline;
+  final String severity;   // Extreme, Severe, Moderate, Minor
+  final String description;
+  final String instruction;
+  final String expires;
+
+  const WeatherAlert({
+    required this.event,
+    required this.headline,
+    required this.severity,
+    this.description = '',
+    this.instruction = '',
+    this.expires = '',
   });
 }
 
+/// Activity types for Best Time suggestions
+enum ActivityType {
+  walking,
+  running,
+  cycling,
+  gardening,
+  photography,
+  dining,
+  hiking,
+  dogWalking,
+}
+
+extension ActivityTypeX on ActivityType {
+  String get displayName {
+    switch (this) {
+      case ActivityType.walking: return 'Walking';
+      case ActivityType.running: return 'Running';
+      case ActivityType.cycling: return 'Cycling';
+      case ActivityType.gardening: return 'Gardening';
+      case ActivityType.photography: return 'Photography';
+      case ActivityType.dining: return 'Outdoor dining';
+      case ActivityType.hiking: return 'Hiking';
+      case ActivityType.dogWalking: return 'Dog walk';
+    }
+  }
+
+  String get emoji {
+    switch (this) {
+      case ActivityType.walking: return '🚶';
+      case ActivityType.running: return '🏃';
+      case ActivityType.cycling: return '🚴';
+      case ActivityType.gardening: return '🌱';
+      case ActivityType.photography: return '📸';
+      case ActivityType.dining: return '🍽️';
+      case ActivityType.hiking: return '🥾';
+      case ActivityType.dogWalking: return '🐕';
+    }
+  }
+
+  static ActivityType fromString(String s) {
+    return ActivityType.values.firstWhere(
+      (e) => e.name == s,
+      orElse: () => ActivityType.walking,
+    );
+  }
+
+  /// Returns true if conditions are suitable for this activity
+  bool isSuitable(HourlyWeather h, {DateTime? sunriseTime, DateTime? sunsetTime}) {
+    bool isRainy = h.precipitationProbability >= 25 ||
+        h.condition == WeatherCondition.rain ||
+        h.condition == WeatherCondition.heavyRain ||
+        h.condition == WeatherCondition.drizzle ||
+        h.condition == WeatherCondition.thunderstorm ||
+        h.condition == WeatherCondition.snow;
+    switch (this) {
+      case ActivityType.walking:
+        return h.isDay && !isRainy && h.temperature >= 5 && h.temperature <= 34;
+      case ActivityType.running:
+        return h.isDay && h.precipitationProbability < 15 &&
+            h.temperature >= 3 && h.temperature <= 22 && h.windSpeed < 30 &&
+            h.condition != WeatherCondition.thunderstorm;
+      case ActivityType.cycling:
+        return h.isDay && h.precipitationProbability < 10 &&
+            h.temperature >= 6 && h.temperature <= 28 && h.windSpeed < 25;
+      case ActivityType.gardening:
+        return h.isDay && h.precipitationProbability < 30 &&
+            h.temperature >= 8 && h.temperature <= 30;
+      case ActivityType.photography:
+        if (sunriseTime != null) {
+          final minutesFromSunrise = h.time.difference(sunriseTime).inMinutes.abs();
+          if (minutesFromSunrise <= 60) return h.precipitationProbability < 30;
+        }
+        if (sunsetTime != null) {
+          final minutesFromSunset = h.time.difference(sunsetTime).inMinutes.abs();
+          if (minutesFromSunset <= 60) return h.precipitationProbability < 30;
+        }
+        return h.isDay && h.precipitationProbability < 20;
+      case ActivityType.dining:
+        return h.isDay && h.precipitationProbability < 5 &&
+            h.temperature >= 15 && h.temperature <= 32 && h.windSpeed < 15;
+      case ActivityType.hiking:
+        return h.isDay && h.precipitationProbability < 20 &&
+            h.temperature >= 5 && h.temperature <= 28 &&
+            h.condition != WeatherCondition.thunderstorm;
+      case ActivityType.dogWalking:
+        return h.isDay && h.precipitationProbability < 20 &&
+            h.temperature >= 2 && h.temperature <= 32;
+    }
+  }
+}
 class SavedLocation {
   final String name;
   final String country;

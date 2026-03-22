@@ -16,6 +16,14 @@ class AppSettings {
   /// Enthusiast mode only
   final bool showMetricsRow; // wind / humidity / UV / pressure row
   final bool showAstronomy;  // sunrise time, sunset time, moon phase
+  final bool showRadar;      // radar map
+
+  /// General — applied to both modes
+  final bool showAlerts;          // severe weather alert banner
+  final bool showHistoricalBadge; // +/- vs historical avg on today row
+
+  /// Best time card activity (stored as string for JSON compatibility)
+  final String preferredActivity;
 
   const AppSettings({
     this.useCelsius = true,
@@ -25,6 +33,10 @@ class AppSettings {
     this.showConfidenceStrip = true,
     this.showMetricsRow = true,
     this.showAstronomy = true,
+    this.showRadar = true,
+    this.showAlerts = true,
+    this.showHistoricalBadge = true,
+    this.preferredActivity = 'walking',
   });
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +47,10 @@ class AppSettings {
         'showConfidenceStrip': showConfidenceStrip,
         'showMetricsRow': showMetricsRow,
         'showAstronomy': showAstronomy,
+        'showRadar': showRadar,
+        'showAlerts': showAlerts,
+        'showHistoricalBadge': showHistoricalBadge,
+        'preferredActivity': preferredActivity,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -45,6 +61,10 @@ class AppSettings {
         showConfidenceStrip: json['showConfidenceStrip'] as bool? ?? true,
         showMetricsRow: json['showMetricsRow'] as bool? ?? true,
         showAstronomy: json['showAstronomy'] as bool? ?? true,
+        showRadar: json['showRadar'] as bool? ?? true,
+        showAlerts: json['showAlerts'] as bool? ?? true,
+        showHistoricalBadge: json['showHistoricalBadge'] as bool? ?? true,
+        preferredActivity: json['preferredActivity'] as String? ?? 'walking',
       );
 
   AppSettings copyWith({
@@ -55,6 +75,10 @@ class AppSettings {
     bool? showConfidenceStrip,
     bool? showMetricsRow,
     bool? showAstronomy,
+    bool? showRadar,
+    bool? showAlerts,
+    bool? showHistoricalBadge,
+    String? preferredActivity,
   }) =>
       AppSettings(
         useCelsius: useCelsius ?? this.useCelsius,
@@ -64,6 +88,10 @@ class AppSettings {
         showConfidenceStrip: showConfidenceStrip ?? this.showConfidenceStrip,
         showMetricsRow: showMetricsRow ?? this.showMetricsRow,
         showAstronomy: showAstronomy ?? this.showAstronomy,
+        showRadar: showRadar ?? this.showRadar,
+        showAlerts: showAlerts ?? this.showAlerts,
+        showHistoricalBadge: showHistoricalBadge ?? this.showHistoricalBadge,
+        preferredActivity: preferredActivity ?? this.preferredActivity,
       );
 }
 

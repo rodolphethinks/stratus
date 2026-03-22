@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/weather.dart';
 import '../services/settings_store.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -91,7 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildModeToggle(),
                       const SizedBox(height: 28),
 
-                      // Mode-specific options
                       if (_mode == AppMode.simple) ...[
                         _sectionTitle('SIMPLE MODE OPTIONS'),
                         const SizedBox(height: 4),
@@ -102,6 +102,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (v) =>
                               _update(_settings.copyWith(showBestTimeCard: v)),
                         ),
+                        if (_settings.showBestTimeCard) ...[
+                          const SizedBox(height: 4),
+                          _ActivityPicker(
+                            selected: _settings.preferredActivity,
+                            onChanged: (v) =>
+                                _update(_settings.copyWith(preferredActivity: v)),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
                         _ToggleRow(
                           label: 'Forecast confidence',
                           subtitle: 'Shows how reliable the 7-day forecast is',
@@ -129,11 +138,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (v) =>
                               _update(_settings.copyWith(showAstronomy: v)),
                         ),
+                        _ToggleRow(
+                          label: 'Radar map',
+                          subtitle: 'Live precipitation radar overlay',
+                          value: _settings.showRadar,
+                          onChanged: (v) =>
+                              _update(_settings.copyWith(showRadar: v)),
+                        ),
                         const SizedBox(height: 20),
                       ],
 
                       _sectionTitle('GENERAL'),
                       const SizedBox(height: 4),
+                      _ToggleRow(
+                        label: 'Severe weather alerts',
+                        subtitle: 'Banner when hazardous conditions are forecast',
+                        value: _settings.showAlerts,
+                        onChanged: (v) =>
+                            _update(_settings.copyWith(showAlerts: v)),
+                      ),
+                      _ToggleRow(
+                        label: 'Historical comparison',
+                        subtitle: 'Show +/- vs 5-year average on today\'s row',
+                        value: _settings.showHistoricalBadge,
+                        onChanged: (v) =>
+                            _update(_settings.copyWith(showHistoricalBadge: v)),
+                      ),
                       _ToggleRow(
                         label: 'Yesterday in forecast',
                         subtitle: 'Compare today with the previous day',
@@ -308,6 +338,63 @@ class _ToggleRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ActivityPicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _ActivityPicker({required this.selected, required this.onChanged});
+
+  static const _activities = ActivityType.values;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Activity',
+          style: TextStyle(
+            fontSize: 13,
+            color: Color(0x881A1A2E),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _activities.map((a) {
+            final isSelected = a.name == selected;
+            return GestureDetector(
+              onTap: () => onChanged(a.name),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF1A1A2E)
+                      : const Color(0xFFEEEEE8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${a.emoji} ${a.displayName}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isSelected
+                        ? Colors.white
+                        : const Color(0xFF1A1A2E),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
